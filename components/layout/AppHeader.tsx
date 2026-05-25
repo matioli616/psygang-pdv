@@ -1,20 +1,9 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import { LogOut } from 'lucide-react'
+import Link from 'next/link'
 import type { Profile } from '@/lib/types'
 
 export default function AppHeader({ profile }: { profile: Profile | null }) {
-  const router = useRouter()
-
-  async function handleLogout() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
-
   const initials = profile?.nome
     ? profile.nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
     : 'PG'
@@ -33,20 +22,13 @@ export default function AppHeader({ profile }: { profile: Profile | null }) {
           )}
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Avatar */}
-          <div className="w-9 h-9 rounded-full bg-neon-purple/20 border border-neon-purple/40 flex items-center justify-center">
-            <span className="font-mono text-neon-purple text-xs font-bold">{initials}</span>
-          </div>
-
-          {/* Logout */}
-          <button
-            onClick={handleLogout}
-            className="w-9 h-9 rounded-xl bg-bg-elevated border border-white/10 flex items-center justify-center text-text-muted hover:text-red-400 hover:border-red-400/30 transition-colors active:scale-95"
-          >
-            <LogOut size={16} />
-          </button>
-        </div>
+        {/* Avatar → link pro perfil */}
+        <Link
+          href="/perfil"
+          className="w-9 h-9 rounded-full bg-neon-purple/20 border border-neon-purple/40 flex items-center justify-center hover:bg-neon-purple/30 transition-colors active:scale-95"
+        >
+          <span className="font-mono text-neon-purple text-xs font-bold">{initials}</span>
+        </Link>
       </div>
     </header>
   )

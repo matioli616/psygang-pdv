@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, ShoppingBag, Package, Users, ClipboardList, Tag } from 'lucide-react'
+import { LayoutDashboard, ShoppingBag, Package, Users, ClipboardList, Tag, UserCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type NavItem = {
@@ -19,6 +19,7 @@ const navItems: NavItem[] = [
   { href: '/produtos',   label: 'Produtos',icon: <Package size={20} />, adminOnly: true },
   { href: '/cupons',     label: 'Cupons',  icon: <Tag size={20} />, adminOnly: true },
   { href: '/equipe',     label: 'Equipe',  icon: <Users size={20} />, adminOnly: true },
+  { href: '/perfil',     label: 'Perfil',  icon: <UserCircle size={20} /> },
 ]
 
 export default function BottomNav({ role }: { role: string }) {

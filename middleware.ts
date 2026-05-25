@@ -45,7 +45,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Protege tudo exceto assets estáticos e arquivos públicos
-    '/((?!_next/static|_next/image|favicon.ico|icons|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    // Protege tudo exceto assets estáticos, arquivos públicos e manifest PWA
+    '/((?!_next/static|_next/image|favicon.ico|icons|sw\\.js|workbox-.*|manifest\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 }

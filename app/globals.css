@@ -1,0 +1,113 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: #0a0a0a;
+    color: #fafafa;
+    min-height: 100dvh;
+    overscroll-behavior: none;
+  }
+
+  /* Evita zoom no iOS ao focar input */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* Scrollbar dark */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0a0a0a;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 2px;
+  }
+}
+
+@layer components {
+  /* Botão primário — neon roxo */
+  .btn-primary {
+    @apply bg-neon-purple text-black font-display text-lg uppercase tracking-wider
+           min-h-[48px] px-6 rounded-xl active:scale-95 transition-all duration-150
+           hover:shadow-neon-purple disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  /* Botão secundário — bordado */
+  .btn-secondary {
+    @apply bg-transparent text-text-primary border border-white/20
+           min-h-[48px] px-6 rounded-xl active:scale-95 transition-all duration-150
+           hover:border-neon-purple/50 disabled:opacity-40;
+  }
+
+  /* Botão ghost */
+  .btn-ghost {
+    @apply bg-bg-elevated text-text-secondary
+           min-h-[48px] px-4 rounded-xl active:scale-95 transition-all duration-150
+           hover:bg-bg-overlay;
+  }
+
+  /* Card padrão */
+  .card {
+    @apply bg-bg-elevated rounded-2xl p-4 border border-white/5
+           transition-colors duration-200;
+  }
+
+  .card-hover {
+    @apply card hover:border-neon-purple/30 cursor-pointer;
+  }
+
+  /* Input field */
+  .input-field {
+    @apply bg-bg-overlay border border-white/10 rounded-xl px-4 py-3
+           text-text-primary placeholder:text-text-muted w-full
+           focus:outline-none focus:border-neon-purple focus:ring-1 focus:ring-neon-purple/20
+           transition-colors duration-150;
+  }
+
+  /* Label de campo */
+  .field-label {
+    @apply text-xs uppercase tracking-widest text-text-muted mb-1 block;
+  }
+
+  /* Valor monetário */
+  .money {
+    @apply font-mono text-neon-green;
+  }
+
+  /* Heading de página */
+  .page-title {
+    @apply text-4xl font-display uppercase tracking-wide text-text-primary;
+  }
+
+  /* Tag / Badge */
+  .badge {
+    @apply text-xs font-mono uppercase tracking-wider px-2 py-0.5 rounded-full;
+  }
+  .badge-purple {
+    @apply badge bg-neon-purple/20 text-neon-purple border border-neon-purple/30;
+  }
+  .badge-green {
+    @apply badge bg-neon-green/20 text-neon-green border border-neon-green/30;
+  }
+
+  /* Skeleton loading */
+  .skeleton {
+    @apply bg-bg-overlay rounded-xl animate-pulse;
+  }
+}

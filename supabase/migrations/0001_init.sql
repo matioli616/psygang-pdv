@@ -61,7 +61,7 @@ begin
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'nome', split_part(new.email, '@', 1)),
-    coalesce((new.raw_user_meta_data->>'role')::user_role, 'vendedor')
+    coalesce((new.raw_user_meta_data->>'role')::public.user_role, 'vendedor'::public.user_role)
   );
   return new;
 end;

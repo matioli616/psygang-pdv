@@ -1,71 +1,126 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatCurrency, formatDate } from '@/lib/utils'
-import { ClipboardList } from 'lucide-react'
+import VendasClient from './VendasClient'
 
-export default async function VendasPage() {
-  const supabase = await createClient()
+// ── Tipos ────────────────────────────────────────────────────────────────
+interface SearchParams {
+  periodo?:   string   // hoje | ontem | 7dias | 30dias
+  inicio?:    string   // YYYY-MM-DD
+  fim?:       string   // YYYY-MM-DD
+  pagamento?: string   // "pix,dinheiro,debito,credito" (vírgula)
+  vendedor?:  string   // uuid | "todos"
+}
 
-  const { data: vendas } = await supabase
-    .from('vendas')
-    .select('*, profiles(nome), venda_itens(qtd, preco_unitario, produtos(nome))')
-    .order('created_at', { ascending: false })
-    .limit(50)
+// ── Resolve intervalo de datas ───────────────────────────────────────────
+function resolverDatas(sp: SearchParams): { inicio: string | null; fim: string | null } {
+  if (sp.periodo) {
+    const hoje = new Date()
+    hoje.setHours(0, 0, 0, 0)
 
-  const BADGE_PAGAMENTO: Record<string, string> = {
-    pix: 'badge-green',
-    dinheiro: 'badge bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
-    credito: 'badge-purple',
-    debito: 'badge bg-blue-500/20 text-blue-400 border border-blue-500/30',
+    const iso  = (d: Date) => d.toISOString()
+    const isoFim = (d: Date) => {
+      const x = new Date(d)
+      x.setHours(23, 59, 59, 999)
+      return x.toISOString()
+    }
+
+    switch (sp.periodo) {
+      case 'hoje':
+        return { inicio: iso(hoje), fim: isoFim(hoje) }
+      case 'ontem': {
+        const d = new Date(hoje); d.setDate(d.getDate() - 1)
+        return { inicio: iso(d), fim: isoFim(d) }
+      }
+      case '7dias': {
+        const d = new Date(hoje); d.setDate(d.getDate() - 6)
+        return { inicio: iso(d), fim: isoFim(hoje) }
+      }
+      case '30dias': {
+        const d = new Date(hoje); d.setDate(d.getDate() - 29)
+        return { inicio: iso(d), fim: isoFim(hoje) }
+      }
+    }
   }
 
+  return {
+    inicio: sp.inicio ? new Date(sp.inicio + 'T00:00:00').toISOString() : null,
+    fim:    sp.fim    ? new Date(sp.fim    + 'T23:59:59').toISOString() : null,
+  }
+}
+
+// ── Server Component ─────────────────────────────────────────────────────
+export default async function VendasPage({
+  searchParams,
+}: {
+  searchParams: SearchParams
+}) {
+  const supabase = await createClient()
+
+  // Identidade + role do usuário logado
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const { data: meProfile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user!.id)
+    .single()
+
+  const isAdmin = meProfile?.role === 'admin'
+
+  // ── Montar query com filtros dinâmicos ──────────────────────────────
+  let query = supabase
+    .from('vendas')
+    .select(`
+      id, total, desconto, forma_pagamento, observacao, created_at,
+      profiles ( id, nome, role ),
+      venda_itens (
+        id, qtd, preco_unitario,
+        produtos ( id, nome, sku )
+      )
+    `)
+    .order('created_at', { ascending: false })
+    .limit(200)
+
+  // Filtro de data
+  const datas = resolverDatas(searchParams)
+  if (datas.inicio) query = query.gte('created_at', datas.inicio)
+  if (datas.fim)    query = query.lte('created_at', datas.fim)
+
+  // Filtro de forma de pagamento
+  const pagamentos = searchParams.pagamento
+    ? searchParams.pagamento.split(',').filter(Boolean)
+    : []
+  if (pagamentos.length > 0 && pagamentos.length < 4) {
+    query = query.in('forma_pagamento', pagamentos)
+  }
+
+  // Filtro de vendedor (só admin pode filtrar por outros)
+  if (isAdmin && searchParams.vendedor && searchParams.vendedor !== 'todos') {
+    query = query.eq('vendedor_id', searchParams.vendedor)
+  }
+
+  const { data: vendas } = await query
+
+  // Lista de vendedores para o dropdown (admin only)
+  const { data: vendedores } = isAdmin
+    ? await supabase
+        .from('profiles')
+        .select('id, nome')
+        .eq('ativo', true)
+        .order('nome')
+    : { data: [] }
+
   return (
-    <div className="space-y-4">
-      <h2 className="page-title text-2xl">Histórico</h2>
-
-      {(!vendas || vendas.length === 0) ? (
-        <div className="text-center py-16 text-text-muted">
-          <ClipboardList size={48} className="mx-auto mb-3 opacity-30" />
-          <p>Nenhuma venda registrada</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {vendas.map(venda => (
-            <div key={venda.id} className="card space-y-2">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-text-primary font-medium">{(venda as any).profiles?.nome}</p>
-                  <p className="text-text-muted text-xs font-mono">{formatDate(venda.created_at)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="money text-lg">{formatCurrency(venda.total)}</p>
-                  {venda.desconto > 0 && (
-                    <p className="text-red-400 text-xs font-mono">-{formatCurrency(venda.desconto)}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Itens */}
-              <div className="space-y-1">
-                {((venda as any).venda_itens ?? []).map((item: any, i: number) => (
-                  <div key={i} className="flex justify-between text-xs text-text-muted">
-                    <span>{item.qtd}x {item.produtos?.nome}</span>
-                    <span className="font-mono">{formatCurrency(item.preco_unitario * item.qtd)}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <span className={BADGE_PAGAMENTO[venda.forma_pagamento] ?? 'badge'}>
-                  {venda.forma_pagamento}
-                </span>
-                {venda.observacao && (
-                  <span className="text-text-muted text-xs truncate">{venda.observacao}</span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <VendasClient
+      vendas={(vendas ?? []) as any}
+      isAdmin={isAdmin}
+      vendedores={vendedores ?? []}
+      filtrosAtivos={{
+        periodo:   searchParams.periodo  ?? '',
+        inicio:    searchParams.inicio   ?? '',
+        fim:       searchParams.fim      ?? '',
+        pagamento: (pagamentos as any[]),
+        vendedor:  searchParams.vendedor ?? 'todos',
+      }}
+    />
   )
 }

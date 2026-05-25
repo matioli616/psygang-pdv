@@ -50,10 +50,34 @@ export interface VendaItem {
   produtos?: Produto
 }
 
+// Cupom de desconto
+export type TipoDesconto = 'fixo' | 'percentual'
+
+export interface Cupom {
+  id: string
+  codigo: string
+  tipo: TipoDesconto
+  valor: number
+  ativo: boolean
+  uso_maximo: number | null
+  usos: number
+  validade_em: string | null
+  created_at: string
+}
+
+export interface CupomAplicado {
+  id: string
+  codigo: string
+  tipo: TipoDesconto
+  valor: number          // valor original do cupom (% ou R$)
+  valorDesconto: number  // R$ calculado já aplicado
+}
+
 // Carrinho (estado local, não persiste no banco)
 export interface CarrinhoItem {
   produto: Produto
   qtd: number
+  desconto_item: number  // desconto R$ aplicado só neste item
 }
 
 // Padrão de resposta de todas as funções que chamam Supabase

@@ -1,12 +1,12 @@
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-dvh bg-bg flex flex-col items-center justify-center px-4">
+    <div className="min-h-dvh bg-bg flex flex-col items-center justify-center px-4 py-12">
       {/* Logo */}
-      <div className="mb-10 text-center">
-        <h1 className="font-display text-5xl text-neon-purple tracking-widest uppercase">
+      <div className="mb-8 text-center">
+        <h1 className="font-display text-5xl text-neon-purple tracking-widest uppercase leading-tight">
           PsyGang
         </h1>
-        <p className="text-text-muted text-xs uppercase tracking-[0.3em] mt-1">
+        <p className="text-text-muted text-xs uppercase tracking-[0.3em] mt-2">
           Sistema de Vendas
         </p>
       </div>

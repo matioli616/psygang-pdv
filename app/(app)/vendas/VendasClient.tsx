@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search, X, Filter, ChevronDown, ChevronUp,
-  Loader2, ClipboardList, Receipt,
+  Loader2, ClipboardList, Receipt, Download,
 } from 'lucide-react'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { DeleteVendaButton } from './DeleteVendaButton'
@@ -71,6 +71,68 @@ const PERIODOS = [
 ]
 
 const LS_KEY = 'psygang-filtros-vendas'
+
+// ── CSV Export ────────────────────────────────────────────────────────────
+function cell(v: string | number | null | undefined): string {
+  const s = String(v ?? '').replace(/"/g, '""')
+  return `"${s}"`
+}
+
+function exportarCSV(vendas: VendaRow[], nomeArquivo: string) {
+  const BOM = '﻿' // UTF-8 BOM — Excel abre corretamente acentos
+
+  const cabecalho = [
+    'Data', 'Hora', 'Vendedor', 'Produto', 'SKU', 'Qtd',
+    'Preço Unit.', 'Subtotal Item', 'Forma Pgto', 'Desconto Venda', 'Total Venda', 'Observação',
+  ].map(cell).join(',')
+
+  const linhas: string[] = []
+
+  vendas.forEach(v => {
+    const dt = new Date(v.created_at)
+    const data = dt.toLocaleDateString('pt-BR')
+    const hora = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    const vendedor = v.profiles?.nome ?? ''
+
+    if (v.venda_itens.length === 0) {
+      // Venda sem itens — uma linha com campos de produto vazios
+      linhas.push([
+        cell(data), cell(hora), cell(vendedor),
+        cell(''), cell(''), cell(''), cell(''), cell(''),
+        cell(v.forma_pagamento.toUpperCase()),
+        cell(v.desconto.toFixed(2).replace('.', ',')),
+        cell(v.total.toFixed(2).replace('.', ',')),
+        cell(v.observacao ?? ''),
+      ].join(','))
+    } else {
+      v.venda_itens.forEach((item, idx) => {
+        const subtotal = item.qtd * item.preco_unitario
+        linhas.push([
+          cell(data), cell(hora), cell(vendedor),
+          cell(item.produtos?.nome ?? ''),
+          cell(item.produtos?.sku ?? ''),
+          cell(item.qtd),
+          cell(item.preco_unitario.toFixed(2).replace('.', ',')),
+          cell(subtotal.toFixed(2).replace('.', ',')),
+          // Forma pgto, desconto e total só na 1ª linha de cada venda
+          idx === 0 ? cell(v.forma_pagamento.toUpperCase()) : cell(''),
+          idx === 0 ? cell(v.desconto.toFixed(2).replace('.', ',')) : cell(''),
+          idx === 0 ? cell(v.total.toFixed(2).replace('.', ','))    : cell(''),
+          idx === 0 ? cell(v.observacao ?? '') : cell(''),
+        ].join(','))
+      })
+    }
+  })
+
+  const csv = BOM + [cabecalho, ...linhas].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = nomeArquivo
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 // ── Componente principal ──────────────────────────────────────────────────
 export default function VendasClient({
@@ -194,22 +256,43 @@ export default function VendasClient({
     <div className="space-y-4">
 
       {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <h2 className="page-title text-2xl">Histórico</h2>
-        <button
-          onClick={() => setAberto(v => !v)}
-          className={cn(
-            'flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono transition-all',
-            aberto
-              ? 'bg-neon-purple/15 border-neon-purple/40 text-neon-purple'
-              : 'bg-bg-overlay border-white/10 text-text-muted'
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="page-title text-2xl shrink-0">Histórico</h2>
+
+        <div className="flex items-center gap-2">
+          {/* Exportar CSV */}
+          {exibidas.length > 0 && (
+            <button
+              onClick={() => {
+                const hoje = new Date().toISOString().slice(0, 10)
+                exportarCSV(exibidas, `psygang-vendas-${hoje}.csv`)
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-neon-green/30
+                         bg-neon-green/10 text-neon-green text-xs font-mono
+                         hover:bg-neon-green/20 active:scale-95 transition-all"
+              title="Exportar CSV"
+            >
+              <Download size={11} />
+              CSV
+            </button>
           )}
-        >
-          <Filter size={11} />
-          Filtros
-          {temFiltro && <span className="w-1.5 h-1.5 rounded-full bg-neon-purple" />}
-          {aberto ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-        </button>
+
+          {/* Filtros */}
+          <button
+            onClick={() => setAberto(v => !v)}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono transition-all',
+              aberto
+                ? 'bg-neon-purple/15 border-neon-purple/40 text-neon-purple'
+                : 'bg-bg-overlay border-white/10 text-text-muted'
+            )}
+          >
+            <Filter size={11} />
+            Filtros
+            {temFiltro && <span className="w-1.5 h-1.5 rounded-full bg-neon-purple" />}
+            {aberto ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+          </button>
+        </div>
       </div>
 
       {/* ── Painel de filtros (accordion) ───────────────────────── */}

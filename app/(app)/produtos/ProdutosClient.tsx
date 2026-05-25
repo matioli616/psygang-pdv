@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Plus, Edit2, X, Package, ToggleLeft, ToggleRight } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { criarProduto, atualizarProduto, toggleAtivoProduto } from '@/lib/actions/produtos'
 import { formatCurrency } from '@/lib/utils'
 import type { Produto } from '@/lib/types'
 
@@ -48,24 +48,14 @@ export default function ProdutosClient({ initialProdutos }: { initialProdutos: P
   async function onSubmit(data: FormData) {
     setLoading(true)
     setErro(null)
-    const supabase = createClient()
 
     if (editando) {
-      const { error } = await supabase
-        .from('produtos')
-        .update({ ...data, sku: data.sku || null })
-        .eq('id', editando.id)
-
-      if (error) { setErro(error.message); setLoading(false); return }
+      const { error } = await atualizarProduto(editando.id, data)
+      if (error) { setErro(error); setLoading(false); return }
       setProdutos(p => p.map(x => x.id === editando.id ? { ...x, ...data } : x))
     } else {
-      const { data: novo, error } = await supabase
-        .from('produtos')
-        .insert({ ...data, sku: data.sku || null })
-        .select()
-        .single()
-
-      if (error) { setErro(error.message); setLoading(false); return }
+      const { data: novo, error } = await criarProduto(data)
+      if (error) { setErro(error); setLoading(false); return }
       setProdutos(p => [...p, novo as Produto].sort((a, b) => a.nome.localeCompare(b.nome)))
     }
 
@@ -75,8 +65,7 @@ export default function ProdutosClient({ initialProdutos }: { initialProdutos: P
   }
 
   async function toggleAtivo(produto: Produto) {
-    const supabase = createClient()
-    await supabase.from('produtos').update({ ativo: !produto.ativo }).eq('id', produto.id)
+    await toggleAtivoProduto(produto.id, !produto.ativo)
     setProdutos(p => p.map(x => x.id === produto.id ? { ...x, ativo: !x.ativo } : x))
   }
 

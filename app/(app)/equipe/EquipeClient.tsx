@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Edit2, X, Users, ToggleLeft, ToggleRight } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { atualizarMembro, toggleAtivoMembro } from '@/lib/actions/equipe'
 import { formatCurrency } from '@/lib/utils'
 import type { Profile } from '@/lib/types'
 
@@ -40,8 +40,7 @@ export default function EquipeClient({
   async function onSubmit(data: FormData) {
     if (!editando) return
     setLoading(true)
-    const supabase = createClient()
-    const { error } = await supabase.from('profiles').update(data).eq('id', editando.id)
+    const { error } = await atualizarMembro({ id: editando.id, ...data })
     if (!error) {
       setLista(l => l.map(p => p.id === editando.id ? { ...p, ...data } : p))
       setEditando(null)
@@ -50,8 +49,7 @@ export default function EquipeClient({
   }
 
   async function toggleAtivo(profile: Profile) {
-    const supabase = createClient()
-    await supabase.from('profiles').update({ ativo: !profile.ativo }).eq('id', profile.id)
+    await toggleAtivoMembro(profile.id, !profile.ativo)
     setLista(l => l.map(p => p.id === profile.id ? { ...p, ativo: !p.ativo } : p))
   }
 

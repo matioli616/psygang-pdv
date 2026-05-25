@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -22,6 +22,7 @@ const FORMAS: { value: FormaPagamento; label: string; emoji: string }[] = [
 
 export default function NovaVendaPage() {
   const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [busca, setBusca] = useState('')
   const [loading, setLoading] = useState(false)
@@ -432,7 +433,7 @@ export default function NovaVendaPage() {
 
       {/* Botão Fechar Venda */}
       {itens.length > 0 && (
-        <motion.button whileTap={{ scale: 0.97 }} onClick={fecharVenda} disabled={loading}
+        <motion.button whileTap={{ scale: 0.97 }} onClick={fecharVenda} disabled={loading || isPending}
           className="btn-primary w-full flex items-center justify-center gap-2 sticky bottom-24 shadow-neon-purple"
         >
           {loading ? <span className="animate-pulse">Processando...</span> : (

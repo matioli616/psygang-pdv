@@ -25,6 +25,9 @@ export async function criarVenda(
 ): Promise<ApiResponse<{ venda_id: string; total: number; desconto_total: number }>> {
   const supabase = await createClient()
 
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { data: null, error: 'Não autenticado' }
+
   const { data, error } = await supabase.rpc('criar_venda_completa', {
     p_forma_pagamento: input.forma_pagamento,
     p_desconto:        input.desconto,
@@ -41,6 +44,9 @@ export async function deletarVenda(
   vendaId: string
 ): Promise<ApiResponse<null>> {
   const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { data: null, error: 'Não autenticado' }
 
   // Deletar a venda — o cascade apaga os itens automaticamente
   // e o trigger `restaurar_estoque` devolve o estoque de cada item
@@ -60,6 +66,9 @@ export async function listarVendas(
   filtro?: { dias?: number }
 ): Promise<ApiResponse<Venda[]>> {
   const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { data: null, error: 'Não autenticado' }
 
   let query = supabase
     .from('vendas')
@@ -82,6 +91,9 @@ export async function validarCupon(
   codigo: string
 ): Promise<ApiResponse<{ id: string; tipo: string; valor: number; valorDesconto: number } | null>> {
   const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { data: null, error: 'Não autenticado' }
 
   const { data, error } = await supabase
     .from('cupons')

@@ -26,6 +26,25 @@ export default function LoginPage() {
   })
 
   async function onSubmit(data: FormData) {
+    // Rate limit client-side: max 5 tentativas por minuto (UX guard)
+    const key = 'login_attempts'
+    const stored = JSON.parse(localStorage.getItem(key) || '{"count":0,"ts":0}')
+    const now = Date.now()
+    const windowMs = 60 * 1000 // 1 min
+
+    if (now - stored.ts > windowMs) {
+      stored.count = 0
+      stored.ts = now
+    }
+    stored.count++
+    localStorage.setItem(key, JSON.stringify(stored))
+
+    if (stored.count > 5) {
+      const waitSec = Math.ceil((windowMs - (now - stored.ts)) / 1000)
+      setError(`Muitas tentativas. Aguarde ${waitSec}s.`)
+      return
+    }
+
     setLoading(true)
     setError(null)
     const supabase = createClient()

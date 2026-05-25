@@ -15,6 +15,7 @@ const nextConfig = {
         '*.app.github.dev',
         '*.githubpreview.dev',
         '*.github.dev',
+        '*.vercel.app',
       ],
     },
   },

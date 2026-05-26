@@ -98,6 +98,53 @@ export async function deletarVenda(
   return { data: null, error: null }
 }
 
+// Filtros serializados passados pelo VendasClient ao carregar mais páginas
+export interface FiltrosVendas {
+  inicio:     string | null
+  fim:        string | null
+  pagamentos: string[]   // ['pix','dinheiro',...]
+  vendedorId: string | null
+}
+
+export async function carregarMaisVendas(
+  filtros: FiltrosVendas,
+  offset: number,
+  pageSize = 20,
+): Promise<ApiResponse<Venda[]>> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { data: null, error: 'Não autenticado' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+  const isAdmin = profile?.role === 'admin'
+
+  let query = supabase
+    .from('vendas')
+    .select(`
+      id, vendedor_id, total, desconto, forma_pagamento, observacao, created_at,
+      profiles ( id, nome, role ),
+      venda_itens ( id, qtd, preco_unitario, produtos ( id, nome, sku ) )
+    `)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + pageSize - 1)
+
+  if (filtros.inicio) query = query.gte('created_at', filtros.inicio)
+  if (filtros.fim)    query = query.lte('created_at', filtros.fim)
+  if (filtros.pagamentos.length > 0 && filtros.pagamentos.length < 4)
+    query = query.in('forma_pagamento', filtros.pagamentos)
+  if (isAdmin && filtros.vendedorId)
+    query = query.eq('vendedor_id', filtros.vendedorId)
+
+  const { data, error } = await query
+  if (error) return { data: null, error: error.message }
+  return { data: data as unknown as Venda[], error: null }
+}
+
 export async function listarVendas(
   filtro?: { dias?: number }
 ): Promise<ApiResponse<Venda[]>> {

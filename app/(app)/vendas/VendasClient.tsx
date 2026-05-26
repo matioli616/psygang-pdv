@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useMemo, useTransition, useEffect, useCallback } from 'react'
+import { useState, useMemo, useTransition, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search, X, Filter, ChevronDown, ChevronUp,
-  Loader2, ClipboardList, Receipt, Download,
+  Loader2, ClipboardList, Receipt, Download, ChevronsDown,
 } from 'lucide-react'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
+import { carregarMaisVendas, type FiltrosVendas } from '@/lib/actions/vendas'
 import { DeleteVendaButton } from './DeleteVendaButton'
 import { EditarVendaButton } from './EditarVendaButton'
 
@@ -44,9 +45,12 @@ interface FiltrosAtivos {
 
 interface Props {
   vendas: VendaRow[]
+  total: number
+  pageSize: number
   isAdmin: boolean
   vendedores: Vendedor[]
   filtrosAtivos: FiltrosAtivos
+  filtrosParaAction: FiltrosVendas
 }
 
 // ── Constantes ────────────────────────────────────────────────────────────
@@ -137,10 +141,38 @@ function exportarCSV(vendas: VendaRow[], nomeArquivo: string) {
 
 // ── Componente principal ──────────────────────────────────────────────────
 export default function VendasClient({
-  vendas, isAdmin, vendedores, filtrosAtivos,
+  vendas: vendasIniciais, total, pageSize,
+  isAdmin, vendedores, filtrosAtivos, filtrosParaAction,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+
+  // ── Paginação ─────────────────────────────────────────────────────────
+  const [vendas,      setVendas]      = useState<VendaRow[]>(vendasIniciais)
+  const [offset,      setOffset]      = useState(vendasIniciais.length)
+  const [isPaginating, startPaginate] = useTransition()
+  const hasMore = offset < total
+
+  // Reset quando filtros mudam (nova navegação server-side)
+  const prevFiltros = useRef(JSON.stringify(filtrosParaAction))
+  useEffect(() => {
+    const novo = JSON.stringify(filtrosParaAction)
+    if (novo !== prevFiltros.current) {
+      prevFiltros.current = novo
+      setVendas(vendasIniciais)
+      setOffset(vendasIniciais.length)
+    }
+  }, [filtrosParaAction, vendasIniciais])
+
+  function carregarMais() {
+    startPaginate(async () => {
+      const { data, error } = await carregarMaisVendas(filtrosParaAction, offset, pageSize)
+      if (!error && data) {
+        setVendas(prev => [...prev, ...(data as VendaRow[])])
+        setOffset(prev => prev + data.length)
+      }
+    })
+  }
 
   // Estado dos filtros — inicializado via URL (props)
   const [periodo,    setPeriodo]    = useState(filtrosAtivos.periodo)
@@ -460,9 +492,11 @@ export default function VendasClient({
           </span>
         ) : (
           <span className="text-text-muted text-xs font-mono">
-            {exibidas.length === vendas.length
-              ? `${vendas.length} venda${vendas.length !== 1 ? 's' : ''}`
-              : `Mostrando ${exibidas.length} de ${vendas.length}`
+            {busca.trim()
+              ? `${exibidas.length} de ${vendas.length} carregadas`
+              : vendas.length < total
+                ? `${vendas.length} de ${total} vendas`
+                : `${total} venda${total !== 1 ? 's' : ''}`
             }
           </span>
         )}
@@ -491,12 +525,12 @@ export default function VendasClient({
           'space-y-3 transition-opacity duration-200',
           isPending && 'opacity-50 pointer-events-none'
         )}>
-          {exibidas.map((venda, i) => (
+          {exibidas.map(venda => (
             <motion.div
               key={venda.id}
+              layout
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: Math.min(i * 0.04, 0.16) }}
               className="card space-y-2"
             >
               {/* Linha principal */}
@@ -564,6 +598,38 @@ export default function VendasClient({
               </div>
             </motion.div>
           ))}
+
+          {/* ── Carregar mais ──────────────────────────────────────── */}
+          {!busca.trim() && hasMore && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="pt-2"
+            >
+              <button
+                onClick={carregarMais}
+                disabled={isPaginating}
+                className="w-full flex items-center justify-center gap-2 py-3
+                           rounded-xl border border-white/10 bg-white/5
+                           text-text-muted text-sm font-medium
+                           hover:border-neon-purple/40 hover:text-neon-purple
+                           active:scale-95 transition-all duration-150
+                           disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isPaginating ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" />
+                    Carregando…
+                  </>
+                ) : (
+                  <>
+                    <ChevronsDown size={15} />
+                    Carregar mais ({total - vendas.length} restantes)
+                  </>
+                )}
+              </button>
+            </motion.div>
+          )}
         </div>
       )}
 

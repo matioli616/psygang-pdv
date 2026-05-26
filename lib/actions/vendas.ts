@@ -40,6 +40,42 @@ export async function criarVenda(
   return { data: data as any, error: null }
 }
 
+export async function editarVenda(
+  vendaId: string,
+  dados: { forma_pagamento: FormaPagamento; observacao: string }
+): Promise<ApiResponse<null>> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { data: null, error: 'Não autenticado' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  const isAdmin = profile?.role === 'admin'
+
+  // Vendedor só edita própria venda; admin edita qualquer uma
+  const { error, data: rows } = await supabase
+    .from('vendas')
+    .update({
+      forma_pagamento: dados.forma_pagamento,
+      observacao: dados.observacao.trim() || null,
+    })
+    .eq('id', vendaId)
+    .match(isAdmin ? {} : { vendedor_id: user.id })
+    .select('id')
+
+  if (error) return { data: null, error: error.message }
+  if (!rows || rows.length === 0) return { data: null, error: 'Venda não encontrada ou sem permissão' }
+
+  revalidatePath('/vendas')
+  revalidatePath('/dashboard')
+  return { data: null, error: null }
+}
+
 export async function deletarVenda(
   vendaId: string
 ): Promise<ApiResponse<null>> {

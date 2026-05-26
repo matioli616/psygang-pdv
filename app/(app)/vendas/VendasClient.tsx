@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { DeleteVendaButton } from './DeleteVendaButton'
+import { EditarVendaButton } from './EditarVendaButton'
 
 // ── Tipos ────────────────────────────────────────────────────────────────
 type FormaPagamento = 'pix' | 'dinheiro' | 'debito' | 'credito'
@@ -512,7 +513,14 @@ export default function VendasClient({
                     <p className="text-neon-pink text-xs font-mono">-{formatCurrency(venda.desconto)}</p>
                   )}
                 </div>
-                <DeleteVendaButton vendaId={venda.id} total={venda.total} />
+                <div className="flex flex-col gap-1 shrink-0">
+                  <DeleteVendaButton vendaId={venda.id} total={venda.total} />
+                  <EditarVendaButton
+                    vendaId={venda.id}
+                    formaPagamento={venda.forma_pagamento}
+                    observacao={venda.observacao}
+                  />
+                </div>
               </div>
 
               {/* Itens */}

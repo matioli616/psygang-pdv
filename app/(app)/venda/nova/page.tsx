@@ -9,9 +9,11 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useCarrinho } from '@/lib/stores/carrinho'
+import { usePontoVenda } from '@/lib/stores/pontoVenda'
+import { EscolhaPontoVenda, SeletorPontoVenda } from '@/components/venda/SeletorPontoVenda'
 import { criarVenda, validarCupon } from '@/lib/actions/vendas'
 import { formatCurrency } from '@/lib/utils'
-import type { FormaPagamento, ProdutoVenda } from '@/lib/types'
+import type { FormaPagamento, PontoVenda, ProdutoVenda } from '@/lib/types'
 
 const FORMAS: { value: FormaPagamento; label: string; emoji: string }[] = [
   { value: 'pix',      label: 'PIX',      emoji: '⚡' },
@@ -60,6 +62,21 @@ export default function NovaVendaPage() {
 
   useEffect(() => { buscarProdutos(busca) }, [busca, buscarProdutos])
 
+  // ── Ponto de venda (lembrado no aparelho) ────────────
+  const { pontoVendaId, setPontoVendaId } = usePontoVenda()
+  const [pontos, setPontos] = useState<PontoVenda[] | null>(null)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+    createClient()
+      .from('pontos_venda').select('id, nome, ativo').eq('ativo', true).order('ordem')
+      .then(({ data }) => setPontos(data ?? []))
+  }, [])
+
+  // Ponto salvo que foi desativado/removido não vale mais
+  const pontoAtual = pontos?.find(p => p.id === pontoVendaId) ?? null
+
   // ── Aplicar cupom ────────────────────────────────────
   async function aplicarCupon() {
     if (!cuponInput.trim()) return
@@ -86,6 +103,7 @@ export default function NovaVendaPage() {
 
   // ── Fechar venda ──────────────────────────────────────
   async function fecharVenda() {
+    if (!pontoAtual)            return setErro('Selecione o ponto de venda')
     if (itens.length === 0)     return setErro('Adicione produtos ao carrinho')
     if (!formaPagamento)        return setErro('Selecione a forma de pagamento')
     if (total() < 0)            return setErro('Desconto maior que o total')
@@ -98,6 +116,7 @@ export default function NovaVendaPage() {
       desconto:        descontoVendaRS(),  // só o desconto manual da venda
       observacao,
       cupon_id:        cupon?.id ?? null,
+      ponto_venda_id:  pontoAtual.id,
       // Preço e custo são lidos do cadastro pela RPC
       itens: itens.map(i => ({
         produto_id:     i.produto.id,
@@ -115,12 +134,29 @@ export default function NovaVendaPage() {
   const totalItens = itens.reduce((acc, i) => acc + i.qtd, 0)
   const temDesconto = totalDesconto() > 0
 
+  // Espera localStorage e a lista de pontos para não piscar a escolha
+  if (!mounted || pontos === null) {
+    return <div className="card h-40 animate-pulse" />
+  }
+
+  if (!pontoAtual) {
+    return (
+      <div className="space-y-4">
+        <h2 className="page-title text-2xl">Nova Venda</h2>
+        <EscolhaPontoVenda pontos={pontos} onChange={setPontoVendaId} />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
 
-      {/* Header + busca */}
+      {/* Header + ponto de venda + busca */}
       <div>
         <h2 className="page-title text-2xl mb-3">Nova Venda</h2>
+        <div className="mb-3">
+          <SeletorPontoVenda pontos={pontos} valor={pontoAtual.id} onChange={setPontoVendaId} />
+        </div>
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
           <input

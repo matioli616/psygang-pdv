@@ -41,6 +41,22 @@ export function calcComissao(faturamentoVendedor: number, comissaoPct: number): 
   return faturamentoVendedor * (comissaoPct / 100)
 }
 
+/** Filtra vendas de um ponto; null = todos os pontos */
+export function filtrarPorPonto<T extends { ponto_venda_id: string }>(
+  vendas: T[],
+  pontoId: string | null,
+): T[] {
+  return pontoId ? vendas.filter(v => v.ponto_venda_id === pontoId) : vendas
+}
+
+/** KPIs separados por ponto de venda, na ordem de `pontos` */
+export function calcKPIsPorPonto<T extends VendaKPI & { ponto_venda_id: string }>(
+  vendas: T[],
+  pontos: { id: string; nome: string }[],
+): { id: string; nome: string; kpis: KPIs }[] {
+  return pontos.map(p => ({ id: p.id, nome: p.nome, kpis: calcKPIs(filtrarPorPonto(vendas, p.id)) }))
+}
+
 /** Variação % entre períodos; null quando não há base de comparação */
 export function calcVariacao(current: number, previous: number): number | null {
   if (previous === 0) return null

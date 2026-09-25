@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import DashboardClient from './DashboardClient'
-import type { VendaDashboard } from '@/lib/types'
+import type { PontoVenda, VendaDashboard } from '@/lib/types'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -23,5 +23,14 @@ export default async function DashboardPage() {
   const { data: vendas } = await supabase
     .rpc('dashboard_vendas', { p_desde: from60d.toISOString() })
 
-  return <DashboardClient vendas={(vendas as VendaDashboard[] | null) ?? []} />
+  // Inclui inativos: vendas antigas de um ponto desativado continuam aparecendo
+  const { data: pontos } = await supabase
+    .from('pontos_venda').select('id, nome, ativo').order('ordem')
+
+  return (
+    <DashboardClient
+      vendas={(vendas as VendaDashboard[] | null) ?? []}
+      pontos={(pontos as PontoVenda[] | null) ?? []}
+    />
+  )
 }

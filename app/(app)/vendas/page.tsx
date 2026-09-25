@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import VendasClient, { type VendaRow } from './VendasClient'
-import type { FormaPagamento } from '@/lib/types'
+import type { FormaPagamento, PontoVenda } from '@/lib/types'
 
 const PAGE_SIZE = 20
 
@@ -14,6 +14,7 @@ interface SearchParams {
   fim?:       string
   pagamento?: string
   vendedor?:  string
+  ponto?:     string
 }
 
 // ── Resolve intervalo de datas ───────────────────────────────────────────
@@ -63,13 +64,20 @@ export default async function VendasPage({
     ? searchParams.pagamento.split(',').filter(Boolean)
     : []
 
+  // Pontos de venda (inclui inativos: histórico antigo continua filtrável)
+  const { data: pontosData } = await supabase
+    .from('pontos_venda').select('id, nome, ativo').order('ordem')
+  const pontos = (pontosData as PontoVenda[] | null) ?? []
+  const pontoId = pontos.some(p => p.id === searchParams.ponto) ? searchParams.ponto! : null
+
   // ── Query base ────────────────────────────────────────────────────────
   function buildQuery(supabase: Awaited<ReturnType<typeof import('@/lib/supabase/server').createClient>>) {
     let q = supabase
       .from('vendas')
       .select(`
-        id, total, desconto, forma_pagamento, observacao, created_at,
+        id, total, desconto, forma_pagamento, observacao, created_at, ponto_venda_id,
         profiles ( id, nome, role ),
+        pontos_venda ( nome ),
         venda_itens (
           id, qtd, preco_unitario,
           produtos ( id, nome, sku )
@@ -83,6 +91,7 @@ export default async function VendasPage({
       q = q.in('forma_pagamento', pagamentos)
     if (isAdmin && searchParams.vendedor && searchParams.vendedor !== 'todos')
       q = q.eq('vendedor_id', searchParams.vendedor)
+    if (pontoId) q = q.eq('ponto_venda_id', pontoId)
 
     return q
   }
@@ -110,18 +119,21 @@ export default async function VendasPage({
       pageSize={PAGE_SIZE}
       isAdmin={isAdmin}
       vendedores={vendedores ?? []}
+      pontos={pontos}
       filtrosAtivos={{
         periodo:    searchParams.periodo  ?? '',
         inicio:     searchParams.inicio   ?? '',
         fim:        searchParams.fim      ?? '',
         pagamento:  pagamentos.filter(isFormaPagamento),
         vendedor:   searchParams.vendedor ?? 'todos',
+        ponto:      pontoId ?? 'todos',
       }}
       filtrosParaAction={{
         inicio:     datas.inicio,
         fim:        datas.fim,
         pagamentos,
         vendedorId,
+        pontoId,
       }}
     />
   )

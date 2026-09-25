@@ -13,6 +13,7 @@ const criarVendaSchema = z.object({
   desconto:        z.number().finite().min(0, 'Desconto inválido'),   // desconto manual R$ na venda
   observacao:      z.string().max(500).optional(),
   cupon_id:        z.string().uuid().nullish(),
+  ponto_venda_id:  z.string({ required_error: 'Selecione o ponto de venda' }).uuid('Selecione o ponto de venda'),
   itens: z.array(z.object({
     produto_id:    z.string().uuid(),
     qtd:           z.number().int().min(1, 'Quantidade inválida').max(9999),
@@ -43,6 +44,7 @@ export async function criarVenda(
     p_observacao:      parsed.data.observacao ?? null,
     p_itens:           parsed.data.itens,
     p_cupon_id:        parsed.data.cupon_id ?? null,
+    p_ponto_venda_id:  parsed.data.ponto_venda_id,
   })
 
   if (error) return { data: null, error: error.message }
@@ -118,6 +120,7 @@ export interface FiltrosVendas {
   fim:        string | null
   pagamentos: string[]   // ['pix','dinheiro',...]
   vendedorId: string | null
+  pontoId:    string | null
 }
 
 export async function carregarMaisVendas(
@@ -134,8 +137,9 @@ export async function carregarMaisVendas(
   let query = supabase
     .from('vendas')
     .select(`
-      id, vendedor_id, total, desconto, forma_pagamento, observacao, created_at,
+      id, vendedor_id, total, desconto, forma_pagamento, observacao, created_at, ponto_venda_id,
       profiles ( id, nome, role ),
+      pontos_venda ( nome ),
       venda_itens ( id, qtd, preco_unitario, produtos ( id, nome, sku ) )
     `)
     .order('created_at', { ascending: false })
@@ -147,6 +151,8 @@ export async function carregarMaisVendas(
     query = query.in('forma_pagamento', filtros.pagamentos)
   if (isAdmin && filtros.vendedorId)
     query = query.eq('vendedor_id', filtros.vendedorId)
+  if (filtros.pontoId && z.string().uuid().safeParse(filtros.pontoId).success)
+    query = query.eq('ponto_venda_id', filtros.pontoId)
 
   const { data, error } = await query
   if (error) return { data: null, error: error.message }

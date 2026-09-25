@@ -14,6 +14,7 @@ import { EditarVendaButton } from './EditarVendaButton'
 
 // ── Tipos ────────────────────────────────────────────────────────────────
 type FormaPagamento = 'pix' | 'dinheiro' | 'debito' | 'credito'
+type PontoVenda = { id: string; nome: string }
 
 interface ItemVenda {
   id: string
@@ -30,6 +31,7 @@ export interface VendaRow {
   observacao: string | null
   created_at: string
   profiles: { id: string; nome: string } | null
+  pontos_venda: { nome: string } | null
   venda_itens: ItemVenda[]
 }
 
@@ -41,6 +43,7 @@ interface FiltrosAtivos {
   fim: string
   pagamento: FormaPagamento[]
   vendedor: string
+  ponto: string
 }
 
 interface Props {
@@ -49,6 +52,7 @@ interface Props {
   pageSize: number
   isAdmin: boolean
   vendedores: Vendedor[]
+  pontos: PontoVenda[]
   filtrosAtivos: FiltrosAtivos
   filtrosParaAction: FiltrosVendas
 }
@@ -87,7 +91,7 @@ function exportarCSV(vendas: VendaRow[], nomeArquivo: string) {
   const BOM = '﻿' // UTF-8 BOM — Excel abre corretamente acentos
 
   const cabecalho = [
-    'Data', 'Hora', 'Vendedor', 'Produto', 'SKU', 'Qtd',
+    'Data', 'Hora', 'Ponto de venda', 'Vendedor', 'Produto', 'SKU', 'Qtd',
     'Preço Unit.', 'Subtotal Item', 'Forma Pgto', 'Desconto Venda', 'Total Venda', 'Observação',
   ].map(cell).join(',')
 
@@ -98,11 +102,12 @@ function exportarCSV(vendas: VendaRow[], nomeArquivo: string) {
     const data = dt.toLocaleDateString('pt-BR')
     const hora = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
     const vendedor = v.profiles?.nome ?? ''
+    const ponto = v.pontos_venda?.nome ?? ''
 
     if (v.venda_itens.length === 0) {
       // Venda sem itens — uma linha com campos de produto vazios
       linhas.push([
-        cell(data), cell(hora), cell(vendedor),
+        cell(data), cell(hora), cell(ponto), cell(vendedor),
         cell(''), cell(''), cell(''), cell(''), cell(''),
         cell(v.forma_pagamento.toUpperCase()),
         cell(v.desconto.toFixed(2).replace('.', ',')),
@@ -113,7 +118,7 @@ function exportarCSV(vendas: VendaRow[], nomeArquivo: string) {
       v.venda_itens.forEach((item, idx) => {
         const subtotal = item.qtd * item.preco_unitario
         linhas.push([
-          cell(data), cell(hora), cell(vendedor),
+          cell(data), cell(hora), cell(ponto), cell(vendedor),
           cell(item.produtos?.nome ?? ''),
           cell(item.produtos?.sku ?? ''),
           cell(item.qtd),
@@ -142,7 +147,7 @@ function exportarCSV(vendas: VendaRow[], nomeArquivo: string) {
 // ── Componente principal ──────────────────────────────────────────────────
 export default function VendasClient({
   vendas: vendasIniciais, total, pageSize,
-  isAdmin, vendedores, filtrosAtivos, filtrosParaAction,
+  isAdmin, vendedores, pontos, filtrosAtivos, filtrosParaAction,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -180,6 +185,7 @@ export default function VendasClient({
   const [fim,        setFim]        = useState(filtrosAtivos.fim)
   const [pagamentos, setPagamentos] = useState<FormaPagamento[]>(filtrosAtivos.pagamento)
   const [vendedor,   setVendedor]   = useState(filtrosAtivos.vendedor || 'todos')
+  const [ponto,      setPonto]      = useState(filtrosAtivos.ponto || 'todos')
   const [busca,      setBusca]      = useState('')
   const [aberto,     setAberto]     = useState(true)
 
@@ -187,7 +193,8 @@ export default function VendasClient({
   useEffect(() => {
     const temURL = !!(
       filtrosAtivos.periodo || filtrosAtivos.inicio || filtrosAtivos.fim ||
-      filtrosAtivos.pagamento.length || (filtrosAtivos.vendedor && filtrosAtivos.vendedor !== 'todos')
+      filtrosAtivos.pagamento.length || (filtrosAtivos.vendedor && filtrosAtivos.vendedor !== 'todos') ||
+      (filtrosAtivos.ponto && filtrosAtivos.ponto !== 'todos')
     )
     if (temURL) return
     try {
@@ -204,6 +211,8 @@ export default function VendasClient({
         p.set('pagamento', f.pagamentos.join(','))
       if (f.vendedor && f.vendedor !== 'todos')
         p.set('vendedor', f.vendedor)
+      if (f.ponto && f.ponto !== 'todos')
+        p.set('ponto', f.ponto)
       if (p.toString()) router.push(`/vendas?${p.toString()}`)
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -212,7 +221,7 @@ export default function VendasClient({
   // ── Aplicar filtros → push URL + salvar localStorage ───────────────────
   const aplicar = useCallback((s: {
     periodo: string; inicio: string; fim: string
-    pagamentos: FormaPagamento[]; vendedor: string
+    pagamentos: FormaPagamento[]; vendedor: string; ponto: string
   }) => {
     const p = new URLSearchParams()
     if (s.periodo) {
@@ -225,6 +234,8 @@ export default function VendasClient({
       p.set('pagamento', s.pagamentos.join(','))
     if (s.vendedor && s.vendedor !== 'todos')
       p.set('vendedor', s.vendedor)
+    if (s.ponto && s.ponto !== 'todos')
+      p.set('ponto', s.ponto)
 
     try { localStorage.setItem(LS_KEY, JSON.stringify(s)) } catch {}
     startTransition(() =>
@@ -236,7 +247,7 @@ export default function VendasClient({
   function onPeriodo(p: string) {
     const novo = periodo === p ? '' : p  // toggle
     setPeriodo(novo); setInicio(''); setFim('')
-    aplicar({ periodo: novo, inicio: '', fim: '', pagamentos, vendedor })
+    aplicar({ periodo: novo, inicio: '', fim: '', pagamentos, vendedor, ponto })
   }
 
   function onData(campo: 'inicio' | 'fim', val: string) {
@@ -244,7 +255,7 @@ export default function VendasClient({
     const novoFim    = campo === 'fim'    ? val : fim
     if (campo === 'inicio') setInicio(val); else setFim(val)
     setPeriodo('')
-    aplicar({ periodo: '', inicio: novoInicio, fim: novoFim, pagamentos, vendedor })
+    aplicar({ periodo: '', inicio: novoInicio, fim: novoFim, pagamentos, vendedor, ponto })
   }
 
   function onPagamento(forma: FormaPagamento) {
@@ -252,22 +263,27 @@ export default function VendasClient({
       ? pagamentos.filter(p => p !== forma)
       : [...pagamentos, forma]
     setPagamentos(novo)
-    aplicar({ periodo, inicio, fim, pagamentos: novo, vendedor })
+    aplicar({ periodo, inicio, fim, pagamentos: novo, vendedor, ponto })
   }
 
   function onVendedor(v: string) {
     setVendedor(v)
-    aplicar({ periodo, inicio, fim, pagamentos, vendedor: v })
+    aplicar({ periodo, inicio, fim, pagamentos, vendedor: v, ponto })
+  }
+
+  function onPonto(id: string) {
+    setPonto(id)
+    aplicar({ periodo, inicio, fim, pagamentos, vendedor, ponto: id })
   }
 
   function limpar() {
     setPeriodo(''); setInicio(''); setFim('')
-    setPagamentos([]); setVendedor('todos'); setBusca('')
+    setPagamentos([]); setVendedor('todos'); setPonto('todos'); setBusca('')
     try { localStorage.removeItem(LS_KEY) } catch {}
     startTransition(() => router.push('/vendas'))
   }
 
-  const temFiltro = !!(periodo || inicio || fim || pagamentos.length || vendedor !== 'todos' || busca)
+  const temFiltro = !!(periodo || inicio || fim || pagamentos.length || vendedor !== 'todos' || ponto !== 'todos' || busca)
 
   // ── Busca client-side (produto/vendedor) ──────────────────────────────
   const exibidas = useMemo(() => {
@@ -420,6 +436,29 @@ export default function VendasClient({
                 </div>
               </div>
 
+              {/* Ponto de venda */}
+              {pontos.length > 1 && (
+                <div>
+                  <p className="field-label mb-1">Ponto de venda</p>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[{ id: 'todos', nome: 'Todos' }, ...pontos].map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => onPonto(p.id)}
+                        className={cn(
+                          'px-3 py-1.5 rounded-xl text-xs font-mono uppercase tracking-wider border transition-all active:scale-95',
+                          ponto === p.id
+                            ? 'bg-neon-green/15 text-neon-green border-neon-green/40'
+                            : 'bg-bg-elevated text-text-muted border-white/5'
+                        )}
+                      >
+                        {p.nome}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Vendedor (admin only) */}
               {isAdmin && (
                 <div>
@@ -539,7 +578,12 @@ export default function VendasClient({
                   <p className="text-text-primary font-medium leading-tight">
                     {venda.profiles?.nome ?? '—'}
                   </p>
-                  <p className="text-text-muted text-xs font-mono">{formatDate(venda.created_at)}</p>
+                  <p className="text-text-muted text-xs font-mono">
+                    {formatDate(venda.created_at)}
+                    {pontos.length > 1 && venda.pontos_venda && (
+                      <span className="text-neon-green"> · {venda.pontos_venda.nome}</span>
+                    )}
+                  </p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="money text-lg">{formatCurrency(venda.total)}</p>
@@ -548,7 +592,7 @@ export default function VendasClient({
                   )}
                 </div>
                 <div className="flex flex-col gap-1 shrink-0">
-                  <DeleteVendaButton vendaId={venda.id} total={venda.total} />
+                  {isAdmin && <DeleteVendaButton vendaId={venda.id} total={venda.total} />}
                   <EditarVendaButton
                     vendaId={venda.id}
                     formaPagamento={venda.forma_pagamento}

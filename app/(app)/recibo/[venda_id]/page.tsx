@@ -15,6 +15,7 @@ export default async function ReciboPage({ params }: Props) {
     .select(`
       id, numero, total, desconto, forma_pagamento, observacao, created_at,
       profiles ( nome, role ),
+      pontos_venda ( nome ),
       venda_itens (
         id, qtd, preco_unitario, desconto_item,
         produtos ( id, nome, sku )

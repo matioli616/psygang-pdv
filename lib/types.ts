@@ -29,9 +29,17 @@ export interface Produto {
 // Produto como o vendedor enxerga — sem custo (GRANT por coluna no banco)
 export type ProdutoVenda = Pick<Produto, 'id' | 'nome' | 'sku' | 'preco_venda' | 'estoque'>
 
+// Ponto de venda (Loja, Barraca…) — mesmo catálogo, sem estoque separado
+export interface PontoVenda {
+  id: string
+  nome: string
+  ativo: boolean
+}
+
 export interface Venda {
   id: string
   vendedor_id: string
+  ponto_venda_id: string
   total: number
   desconto: number
   forma_pagamento: FormaPagamento
@@ -40,6 +48,7 @@ export interface Venda {
   created_at: string
   // joins
   profiles?: Profile
+  pontos_venda?: { nome: string } | null
   venda_itens?: VendaItem[]
 }
 
@@ -97,6 +106,7 @@ export interface VendaDashboard {
   desconto: number
   forma_pagamento: FormaPagamento
   vendedor_id: string
+  ponto_venda_id: string
   created_at: string
   profiles: { nome: string } | null
   venda_itens: {

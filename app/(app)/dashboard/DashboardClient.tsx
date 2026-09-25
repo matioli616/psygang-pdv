@@ -10,8 +10,8 @@ import {
   DollarSign, ArrowUpRight, ArrowDownRight,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
-import { calcKPIs, calcVariacao } from '@/lib/metrics'
-import type { VendaDashboard } from '@/lib/types'
+import { calcKPIs, calcKPIsPorPonto, calcVariacao, filtrarPorPonto } from '@/lib/metrics'
+import type { PontoVenda, VendaDashboard } from '@/lib/types'
 
 // ─────────────────────────────────────────
 // TIPOS
@@ -182,8 +182,15 @@ function DarkTip({ active, payload, label, currency = true }: any) {
 const CORES_NEON  = ['#B026FF', '#39FF14', '#FF10F0', '#555']
 const CORES_BARS  = ['#B026FF', '#39FF14', '#FF10F0', '#aa00ee', '#00ffaa']
 
-export default function DashboardClient({ vendas }: { vendas: VendaRaw[] }) {
+export default function DashboardClient({
+  vendas: todasVendas,
+  pontos,
+}: {
+  vendas: VendaRaw[]
+  pontos: PontoVenda[]
+}) {
   const [filtro, setFiltro] = useState<Filtro>('hoje')
+  const [pontoId, setPontoId] = useState<string | null>(null)   // null = todos
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
   const [mounted, setMounted] = useState(false)
@@ -201,6 +208,9 @@ export default function DashboardClient({ vendas }: { vendas: VendaRaw[] }) {
   )
 
   // ── Vendas filtradas ─────────────────────────────────
+  // Filtro de ponto vem primeiro: todo o resto (KPIs, gráficos, ranking) herda
+  const vendas = useMemo(() => filtrarPorPonto(todasVendas, pontoId), [todasVendas, pontoId])
+
   const vendasPeriodo = useMemo(
     () => vendas.filter(v => { const d = new Date(v.created_at); return d >= from && d <= to }),
     [vendas, from, to]
@@ -217,6 +227,13 @@ export default function DashboardClient({ vendas }: { vendas: VendaRaw[] }) {
   const kpis     = useMemo(() => calcKPIs(vendasPeriodo), [vendasPeriodo])
   const kpisComp = useMemo(() => calcKPIs(vendasCompare), [vendasCompare])
   const hasComp  = compareRange !== null
+
+  // ── Comparativo entre pontos (só em "Todos") ────────
+  const porPonto = useMemo(() => {
+    if (pontoId !== null) return []
+    return calcKPIsPorPonto(vendasPeriodo, pontos)
+      .filter(p => p.kpis.total > 0 || pontos.find(x => x.id === p.id)?.ativo)
+  }, [vendasPeriodo, pontos, pontoId])
 
   // ── Chart: faturamento 30 dias (sempre 30d, independe do filtro) ──
   const chartLinha = useMemo(() => {
@@ -316,6 +333,25 @@ export default function DashboardClient({ vendas }: { vendas: VendaRaw[] }) {
         </div>
       </div>
 
+      {/* ── Ponto de venda ─────────────────────────── */}
+      {pontos.length > 1 && (
+        <div className="flex bg-bg-overlay rounded-xl border border-white/10 p-0.5">
+          {[{ id: null, nome: 'Todos' }, ...pontos].map(p => (
+            <button
+              key={p.id ?? 'todos'}
+              onClick={() => setPontoId(p.id)}
+              className={`flex-1 px-3 py-2 rounded-lg text-xs font-mono uppercase tracking-wider transition-all active:scale-95 ${
+                pontoId === p.id
+                  ? 'bg-neon-green/15 text-neon-green border border-neon-green/40'
+                  : 'text-text-muted'
+              }`}
+            >
+              {p.nome}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* ── Filtros ────────────────────────────────── */}
       <div className="flex gap-1.5 flex-wrap">
         {FILTROS.map(f => (
@@ -379,6 +415,37 @@ export default function DashboardClient({ vendas }: { vendas: VendaRaw[] }) {
           formatter={formatCurrency}
         />
       </div>
+
+      {/* ── Comparativo por ponto de venda ────────── */}
+      {porPonto.length > 1 && (
+        <div className="card">
+          <p className="field-label mb-3">Por ponto de venda</p>
+          <div className="space-y-3">
+            {porPonto.map(p => {
+              const pct = kpis.faturamento > 0 ? (p.kpis.faturamento / kpis.faturamento) * 100 : 0
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => setPontoId(p.id)}
+                  className="w-full text-left space-y-1.5 active:scale-[0.99] transition-transform"
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-text-primary text-sm font-medium">{p.nome}</span>
+                    <span className="money text-base">{formatCurrency(p.kpis.faturamento)}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-bg-overlay overflow-hidden">
+                    <div className="h-full bg-neon-purple rounded-full" style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="flex justify-between text-[11px] font-mono text-text-muted">
+                    <span>{p.kpis.total} vendas · lucro {formatCurrency(p.kpis.lucro)}</span>
+                    <span>{pct.toFixed(0)}%</span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Area: Faturamento 30 dias ──────────────── */}
       <div className="card">

@@ -55,6 +55,7 @@ export interface VendaRecibo {
   observacao: string | null
   created_at: string
   profiles: { nome: string; role: string } | null
+  pontos_venda: { nome: string } | null
   venda_itens: ItemVenda[]
 }
 
@@ -93,7 +94,7 @@ export default function ReciboClient({ venda, numero }: Props) {
     })
 
     const linhas = [
-      `🛸 *PsyGang Vendas*`,
+      `🛸 *PsyGang${venda.pontos_venda ? ` · ${venda.pontos_venda.nome}` : ''}*`,
       `Venda #${numStr} — ${dataHora}`,
       ``,
       `📦 *Itens:*`,
@@ -155,6 +156,11 @@ export default function ReciboClient({ venda, numero }: Props) {
               <p className="font-display text-2xl text-neon-purple tracking-widest uppercase select-none">
                 🛸 PsyGang
               </p>
+              {venda.pontos_venda && (
+                <p className="text-neon-green text-xs font-mono uppercase tracking-[0.2em] mt-0.5">
+                  {venda.pontos_venda.nome}
+                </p>
+              )}
               <p className="text-text-muted text-[10px] tracking-[0.2em] uppercase mt-0.5 print-muted">
                 Comprovante de Venda
               </p>

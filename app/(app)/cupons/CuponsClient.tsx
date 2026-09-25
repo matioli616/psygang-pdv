@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Plus, Tag, X, Edit2, ToggleLeft, ToggleRight, Copy, Check } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { criarCupom, atualizarCupom, toggleAtivoCupom } from '@/lib/actions/cupons'
 import { formatCurrency } from '@/lib/utils'
 import type { Cupom, TipoDesconto } from '@/lib/types'
 
@@ -50,8 +50,6 @@ export default function CuponsClient({ initialCupons }: { initialCupons: Cupom[]
   async function onSubmit(data: FormData) {
     setLoading(true)
     setErro(null)
-    const supabase = createClient()
-
     const payload = {
       codigo:      data.codigo.toUpperCase(),
       tipo:        data.tipo,
@@ -61,13 +59,13 @@ export default function CuponsClient({ initialCupons }: { initialCupons: Cupom[]
     }
 
     if (editando) {
-      const { error } = await supabase.from('cupons').update(payload).eq('id', editando.id)
-      if (error) { setErro(error.message); setLoading(false); return }
+      const { error } = await atualizarCupom(editando.id, payload)
+      if (error) { setErro(error); setLoading(false); return }
       setCupons(c => c.map(x => x.id === editando.id ? { ...x, ...payload } : x))
     } else {
-      const { data: novo, error } = await supabase.from('cupons').insert(payload).select().single()
-      if (error) { setErro(error.message); setLoading(false); return }
-      setCupons(c => [novo as Cupom, ...c])
+      const { data: novo, error } = await criarCupom(payload)
+      if (error || !novo) { setErro(error ?? 'Erro ao criar cupom'); setLoading(false); return }
+      setCupons(c => [novo, ...c])
     }
 
     setModal(false)
@@ -75,8 +73,8 @@ export default function CuponsClient({ initialCupons }: { initialCupons: Cupom[]
   }
 
   async function toggleAtivo(cupom: Cupom) {
-    const supabase = createClient()
-    await supabase.from('cupons').update({ ativo: !cupom.ativo }).eq('id', cupom.id)
+    const { error } = await toggleAtivoCupom(cupom.id, !cupom.ativo)
+    if (error) { setErro(error); return }
     setCupons(c => c.map(x => x.id === cupom.id ? { ...x, ativo: !x.ativo } : x))
   }
 

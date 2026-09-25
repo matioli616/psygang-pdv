@@ -34,29 +34,4 @@ export function formatDateShort(date: string | Date): string {
   }).format(new Date(date))
 }
 
-// Fórmulas financeiras (imutáveis — vide CLAUDE.md)
-export function calcularFaturamento(totais: number[]): number {
-  return totais.reduce((acc, v) => acc + v, 0)
-}
-
-export function calcularCPV(itens: { custo_unitario: number; qtd: number }[]): number {
-  return itens.reduce((acc, i) => acc + i.custo_unitario * i.qtd, 0)
-}
-
-export function calcularLucro(faturamento: number, cpv: number, descontos: number): number {
-  return faturamento - cpv - descontos
-}
-
-export function calcularMargem(lucro: number, faturamento: number): number {
-  if (faturamento === 0) return 0
-  return (lucro / faturamento) * 100
-}
-
-export function calcularTicketMedio(faturamento: number, totalVendas: number): number {
-  if (totalVendas === 0) return 0
-  return faturamento / totalVendas
-}
-
-export function calcularComissao(faturamento: number, comissaoPct: number): number {
-  return faturamento * (comissaoPct / 100)
-}
+// Fórmulas financeiras: ver lib/metrics.ts

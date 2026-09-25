@@ -1,7 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
-import type { CarrinhoItem, CupomAplicado, FormaPagamento, Produto, TipoDesconto } from '@/lib/types'
+import type { CarrinhoItem, CupomAplicado, FormaPagamento, ProdutoVenda, TipoDesconto } from '@/lib/types'
 
 interface CarrinhoStore {
   itens: CarrinhoItem[]
@@ -17,7 +17,7 @@ interface CarrinhoStore {
   observacao: string
 
   // ── Actions ──────────────────────────────
-  addItem:       (produto: Produto) => void
+  addItem:       (produto: ProdutoVenda) => void
   removeItem:    (produtoId: string) => void
   updateQtd:     (produtoId: string, qtd: number) => void
   setDescontoItem: (produtoId: string, desconto: number) => void
@@ -103,7 +103,15 @@ export const useCarrinho = create<CarrinhoStore>((set, get) => ({
     return descontoValor
   },
 
-  descontoCupon: () => get().cupon?.valorDesconto ?? 0,
+  // Recalculado a cada mudança do carrinho — mesma regra da RPC criar_venda_completa
+  descontoCupon: () => {
+    const { cupon, subtotalBruto, descontoItens } = get()
+    if (!cupon) return 0
+    const base = Math.max(0, subtotalBruto() - descontoItens())
+    return cupon.tipo === 'percentual'
+      ? Math.round(base * (cupon.valor / 100) * 100) / 100
+      : Math.min(cupon.valor, base)
+  },
 
   totalDesconto: () => {
     const { descontoItens, descontoVendaRS, descontoCupon } = get()

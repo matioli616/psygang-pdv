@@ -1,46 +1,45 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
+import { z } from 'zod'
+import { requireAdmin, zodErro } from '@/lib/auth'
 import type { ApiResponse, Produto } from '@/lib/types'
 
-interface ProdutoInput {
-  nome: string
-  sku?: string | null
-  preco_venda: number
-  custo: number
-  estoque: number
-}
+const produtoSchema = z.object({
+  nome:        z.string().trim().min(2, 'Nome obrigatório').max(120),
+  sku:         z.string().trim().max(60).nullish(),
+  preco_venda: z.number().finite().min(0, 'Preço inválido'),
+  custo:       z.number().finite().min(0, 'Custo inválido'),
+  estoque:     z.number().int().min(0, 'Estoque inválido'),
+})
+type ProdutoInput = z.infer<typeof produtoSchema>
+
+const idSchema = z.string().uuid('ID inválido')
+
+// Sem `custo`: a coluna só é legível via listar_produtos_admin()
+const COLUNAS_PUBLICAS = 'id, nome, sku, preco_venda, estoque, ativo, created_at'
 
 /** Cria produto — apenas admin */
 export async function criarProduto(
   input: ProdutoInput
 ): Promise<ApiResponse<Produto>> {
-  const supabase = await createClient()
+  const parsed = produtoSchema.safeParse(input)
+  if (!parsed.success) return { data: null, error: zodErro(parsed.error.issues) }
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { data: null, error: 'Não autenticado' }
+  const { supabase, error: authError } = await requireAdmin()
+  if (authError) return { data: null, error: authError }
 
-  const { data: perfil } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (perfil?.role !== 'admin') {
-    return { data: null, error: 'Acesso negado: apenas admins podem gerenciar produtos' }
-  }
-
+  const dados = { ...parsed.data, sku: parsed.data.sku || null }
   const { data, error } = await supabase
     .from('produtos')
-    .insert({ ...input, sku: input.sku || null })
-    .select()
+    .insert(dados)
+    .select(COLUNAS_PUBLICAS)
     .single()
 
   if (error) return { data: null, error: error.message }
 
   revalidatePath('/produtos')
-  return { data: data as Produto, error: null }
+  return { data: { ...data, custo: dados.custo } as Produto, error: null }
 }
 
 /** Atualiza produto — apenas admin */
@@ -48,25 +47,18 @@ export async function atualizarProduto(
   id: string,
   input: ProdutoInput
 ): Promise<ApiResponse<null>> {
-  const supabase = await createClient()
+  const parsedId = idSchema.safeParse(id)
+  const parsed = produtoSchema.safeParse(input)
+  if (!parsedId.success) return { data: null, error: zodErro(parsedId.error.issues) }
+  if (!parsed.success) return { data: null, error: zodErro(parsed.error.issues) }
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { data: null, error: 'Não autenticado' }
-
-  const { data: perfil } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (perfil?.role !== 'admin') {
-    return { data: null, error: 'Acesso negado: apenas admins podem gerenciar produtos' }
-  }
+  const { supabase, error: authError } = await requireAdmin()
+  if (authError) return { data: null, error: authError }
 
   const { error } = await supabase
     .from('produtos')
-    .update({ ...input, sku: input.sku || null })
-    .eq('id', id)
+    .update({ ...parsed.data, sku: parsed.data.sku || null })
+    .eq('id', parsedId.data)
 
   if (error) return { data: null, error: error.message }
 
@@ -79,25 +71,16 @@ export async function toggleAtivoProduto(
   id: string,
   ativo: boolean
 ): Promise<ApiResponse<null>> {
-  const supabase = await createClient()
+  const parsedId = idSchema.safeParse(id)
+  if (!parsedId.success) return { data: null, error: zodErro(parsedId.error.issues) }
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { data: null, error: 'Não autenticado' }
-
-  const { data: perfil } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (perfil?.role !== 'admin') {
-    return { data: null, error: 'Acesso negado: apenas admins podem gerenciar produtos' }
-  }
+  const { supabase, error: authError } = await requireAdmin()
+  if (authError) return { data: null, error: authError }
 
   const { error } = await supabase
     .from('produtos')
-    .update({ ativo })
-    .eq('id', id)
+    .update({ ativo: Boolean(ativo) })
+    .eq('id', parsedId.data)
 
   if (error) return { data: null, error: error.message }
 

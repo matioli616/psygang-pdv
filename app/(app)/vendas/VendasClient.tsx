@@ -22,7 +22,7 @@ interface ItemVenda {
   produtos: { id: string; nome: string; sku: string } | null
 }
 
-interface VendaRow {
+export interface VendaRow {
   id: string
   total: number
   desconto: number

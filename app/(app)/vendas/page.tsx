@@ -1,7 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
-import VendasClient from './VendasClient'
+import VendasClient, { type VendaRow } from './VendasClient'
+import type { FormaPagamento } from '@/lib/types'
 
 const PAGE_SIZE = 20
+
+const FORMAS_PAGAMENTO: readonly string[] = ['dinheiro', 'credito', 'debito', 'pix']
+const isFormaPagamento = (v: string): v is FormaPagamento => FORMAS_PAGAMENTO.includes(v)
 
 // ── Tipos ────────────────────────────────────────────────────────────────
 interface SearchParams {
@@ -101,7 +105,7 @@ export default async function VendasPage({
 
   return (
     <VendasClient
-      vendas={(vendas ?? []) as any}
+      vendas={(vendas ?? []) as unknown as VendaRow[]}
       total={count ?? 0}
       pageSize={PAGE_SIZE}
       isAdmin={isAdmin}
@@ -110,7 +114,7 @@ export default async function VendasPage({
         periodo:    searchParams.periodo  ?? '',
         inicio:     searchParams.inicio   ?? '',
         fim:        searchParams.fim      ?? '',
-        pagamento:  pagamentos as any[],
+        pagamento:  pagamentos.filter(isFormaPagamento),
         vendedor:   searchParams.vendedor ?? 'todos',
       }}
       filtrosParaAction={{

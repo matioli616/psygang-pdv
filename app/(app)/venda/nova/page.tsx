@@ -11,7 +11,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useCarrinho } from '@/lib/stores/carrinho'
 import { criarVenda, validarCupon } from '@/lib/actions/vendas'
 import { formatCurrency } from '@/lib/utils'
-import type { FormaPagamento, Produto } from '@/lib/types'
+import type { FormaPagamento, ProdutoVenda } from '@/lib/types'
 
 const FORMAS: { value: FormaPagamento; label: string; emoji: string }[] = [
   { value: 'pix',      label: 'PIX',      emoji: '⚡' },
@@ -23,7 +23,7 @@ const FORMAS: { value: FormaPagamento; label: string; emoji: string }[] = [
 export default function NovaVendaPage() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [produtos, setProdutos] = useState<Produto[]>([])
+  const [produtos, setProdutos] = useState<ProdutoVenda[]>([])
   const [busca, setBusca] = useState('')
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -49,7 +49,10 @@ export default function NovaVendaPage() {
   // ── Busca produtos ──────────────────────────────────
   const buscarProdutos = useCallback(async (termo: string) => {
     const supabase = createClient()
-    let q = supabase.from('produtos').select('*').eq('ativo', true).gt('estoque', 0).order('nome').limit(20)
+    // Sem `custo`: vendedor não tem permissão de leitura nessa coluna
+    let q = supabase.from('produtos')
+      .select('id, nome, sku, preco_venda, estoque')
+      .eq('ativo', true).gt('estoque', 0).order('nome').limit(20)
     if (termo) q = q.ilike('nome', `%${termo}%`)
     const { data } = await q
     setProdutos(data ?? [])
@@ -71,13 +74,7 @@ export default function NovaVendaPage() {
       return
     }
 
-    // Calcula valor R$ do cupom sobre o subtotal após descontos de item
-    const base = subtotalBruto() - descontoItens()
-    const valorRS = data.tipo === 'percentual'
-      ? Math.round(base * (data.valor / 100) * 100) / 100
-      : data.valor
-
-    setCupon({ id: data.id, codigo: cuponInput.toUpperCase().trim(), tipo: data.tipo as any, valor: data.valor, valorDesconto: valorRS })
+    setCupon({ id: data.id, codigo: cuponInput.toUpperCase().trim(), tipo: data.tipo, valor: data.valor })
     setCuponLoading(false)
   }
 
@@ -101,11 +98,10 @@ export default function NovaVendaPage() {
       desconto:        descontoVendaRS(),  // só o desconto manual da venda
       observacao,
       cupon_id:        cupon?.id ?? null,
+      // Preço e custo são lidos do cadastro pela RPC
       itens: itens.map(i => ({
         produto_id:     i.produto.id,
         qtd:            i.qtd,
-        preco_unitario: i.produto.preco_venda,
-        custo_unitario: i.produto.custo,
         desconto_item:  i.desconto_item,
       })),
     })
@@ -316,7 +312,7 @@ export default function NovaVendaPage() {
                   <p className="text-neon-green font-mono text-sm font-bold">{cupon.codigo}</p>
                   <p className="text-text-muted text-xs">
                     {cupon.tipo === 'percentual' ? `${cupon.valor}% off` : `R$ ${cupon.valor} off`}
-                    {' · '}economia de <span className="text-neon-green">{formatCurrency(cupon.valorDesconto)}</span>
+                    {' · '}economia de <span className="text-neon-green">{formatCurrency(descontoCupon())}</span>
                   </p>
                 </div>
                 <button onClick={removerCupon} className="text-text-muted hover:text-red-400 transition-colors">

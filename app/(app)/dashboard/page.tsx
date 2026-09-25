@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import DashboardClient from './DashboardClient'
+import type { VendaDashboard } from '@/lib/types'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -18,15 +19,9 @@ export default async function DashboardPage() {
   from60d.setDate(from60d.getDate() - 60)
   from60d.setHours(0, 0, 0, 0)
 
+  // RPC admin-only: custo_unitario não é legível direto pela API
   const { data: vendas } = await supabase
-    .from('vendas')
-    .select(`
-      id, total, desconto, forma_pagamento, vendedor_id, created_at,
-      profiles(nome),
-      venda_itens(qtd, preco_unitario, custo_unitario, produtos(nome))
-    `)
-    .gte('created_at', from60d.toISOString())
-    .order('created_at', { ascending: false })
+    .rpc('dashboard_vendas', { p_desde: from60d.toISOString() })
 
-  return <DashboardClient vendas={(vendas as any[]) ?? []} />
+  return <DashboardClient vendas={(vendas as VendaDashboard[] | null) ?? []} />
 }

@@ -43,11 +43,11 @@ interface ItemVenda {
   id: string
   qtd: number
   preco_unitario: number
-  custo_unitario: number
-  produtos: { id: string; nome: string; sku: string } | null
+  desconto_item: number
+  produtos: { id: string; nome: string; sku: string | null } | null
 }
 
-interface VendaComJoins {
+export interface VendaRecibo {
   id: string
   total: number
   desconto: number
@@ -59,7 +59,7 @@ interface VendaComJoins {
 }
 
 interface Props {
-  venda: VendaComJoins
+  venda: VendaRecibo
   numero: number
 }
 

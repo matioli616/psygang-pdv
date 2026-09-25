@@ -49,6 +49,7 @@ venda_itens → id, venda_id FK, produto_id FK, qtd, preco_unitario, custo_unita
 Faturamento = SUM(vendas.total)
 CPV = SUM(venda_itens.custo_unitario * quantidade)
 Lucro = Faturamento - CPV - SUM(descontos)
+  ↳ vendas.total já é gravado líquido (bruto − desconto), então no código: Lucro = SUM(vendas.total) − CPV (lib/metrics.ts)
 Margem % = (Lucro / Faturamento) * 100
 Ticket Médio = Faturamento / COUNT(vendas)
 Comissão = Faturamento Vendedor * (comissao_pct / 100)

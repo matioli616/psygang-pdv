@@ -11,10 +11,8 @@ export default async function ProdutosPage() {
     .from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/venda/nova')
 
-  const { data: produtos } = await supabase
-    .from('produtos')
-    .select('*')
-    .order('nome')
+  // RPC admin-only: a coluna custo não é legível direto pela API
+  const { data: produtos } = await supabase.rpc('listar_produtos_admin')
 
   return <ProdutosClient initialProdutos={produtos ?? []} />
 }

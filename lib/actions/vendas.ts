@@ -1,71 +1,82 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
-import type { ApiResponse, FormaPagamento, Venda } from '@/lib/types'
+import { z } from 'zod'
+import { requireAdmin, requireUser, zodErro } from '@/lib/auth'
+import type { ApiResponse, FormaPagamento, TipoDesconto, Venda } from '@/lib/types'
 
-interface ItemInput {
-  produto_id: string
-  qtd: number
-  preco_unitario: number
-  custo_unitario: number
-  desconto_item: number
-}
+const formaPagamentoSchema = z.enum(['dinheiro', 'credito', 'debito', 'pix'])
 
-interface CriarVendaInput {
-  forma_pagamento: FormaPagamento
-  desconto: number        // desconto manual R$ na venda (sem itens e sem cupom)
-  observacao?: string
-  itens: ItemInput[]
-  cupon_id?: string | null
+// Preço e custo NÃO são enviados: a RPC lê da tabela produtos
+const criarVendaSchema = z.object({
+  forma_pagamento: formaPagamentoSchema,
+  desconto:        z.number().finite().min(0, 'Desconto inválido'),   // desconto manual R$ na venda
+  observacao:      z.string().max(500).optional(),
+  cupon_id:        z.string().uuid().nullish(),
+  itens: z.array(z.object({
+    produto_id:    z.string().uuid(),
+    qtd:           z.number().int().min(1, 'Quantidade inválida').max(9999),
+    desconto_item: z.number().finite().min(0, 'Desconto inválido'),
+  })).min(1, 'Adicione produtos ao carrinho'),
+})
+type CriarVendaInput = z.infer<typeof criarVendaSchema>
+
+export interface VendaCriada {
+  venda_id: string
+  numero: number
+  total: number
+  desconto_total: number
 }
 
 export async function criarVenda(
   input: CriarVendaInput
-): Promise<ApiResponse<{ venda_id: string; total: number; desconto_total: number }>> {
-  const supabase = await createClient()
+): Promise<ApiResponse<VendaCriada>> {
+  const parsed = criarVendaSchema.safeParse(input)
+  if (!parsed.success) return { data: null, error: zodErro(parsed.error.issues) }
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { data: null, error: 'Não autenticado' }
+  const { supabase, error: authError } = await requireUser()
+  if (authError) return { data: null, error: authError }
 
   const { data, error } = await supabase.rpc('criar_venda_completa', {
-    p_forma_pagamento: input.forma_pagamento,
-    p_desconto:        input.desconto,
-    p_observacao:      input.observacao ?? null,
-    p_itens:           input.itens,
-    p_cupon_id:        input.cupon_id ?? null,
+    p_forma_pagamento: parsed.data.forma_pagamento,
+    p_desconto:        parsed.data.desconto,
+    p_observacao:      parsed.data.observacao ?? null,
+    p_itens:           parsed.data.itens,
+    p_cupon_id:        parsed.data.cupon_id ?? null,
   })
 
   if (error) return { data: null, error: error.message }
-  return { data: data as any, error: null }
+
+  revalidatePath('/vendas')
+  revalidatePath('/dashboard')
+  return { data: data as VendaCriada, error: null }
 }
+
+const editarVendaSchema = z.object({
+  vendaId:         z.string().uuid('ID inválido'),
+  forma_pagamento: formaPagamentoSchema,
+  observacao:      z.string().max(500),
+})
 
 export async function editarVenda(
   vendaId: string,
   dados: { forma_pagamento: FormaPagamento; observacao: string }
 ): Promise<ApiResponse<null>> {
-  const supabase = await createClient()
+  const parsed = editarVendaSchema.safeParse({ vendaId, ...dados })
+  if (!parsed.success) return { data: null, error: zodErro(parsed.error.issues) }
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { data: null, error: 'Não autenticado' }
+  const { supabase, userId, isAdmin, error: authError } = await requireUser()
+  if (authError) return { data: null, error: authError }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  const isAdmin = profile?.role === 'admin'
-
-  // Vendedor só edita própria venda; admin edita qualquer uma
+  // Vendedor só edita própria venda; admin edita qualquer uma (reforçado por RLS)
   const { error, data: rows } = await supabase
     .from('vendas')
     .update({
-      forma_pagamento: dados.forma_pagamento,
-      observacao: dados.observacao.trim() || null,
+      forma_pagamento: parsed.data.forma_pagamento,
+      observacao: parsed.data.observacao.trim() || null,
     })
-    .eq('id', vendaId)
-    .match(isAdmin ? {} : { vendedor_id: user.id })
+    .eq('id', parsed.data.vendaId)
+    .match(isAdmin ? {} : { vendedor_id: userId })
     .select('id')
 
   if (error) return { data: null, error: error.message }
@@ -76,22 +87,25 @@ export async function editarVenda(
   return { data: null, error: null }
 }
 
+/** Exclui venda — apenas admin (RLS também exige admin) */
 export async function deletarVenda(
   vendaId: string
 ): Promise<ApiResponse<null>> {
-  const supabase = await createClient()
+  const parsedId = z.string().uuid('ID inválido').safeParse(vendaId)
+  if (!parsedId.success) return { data: null, error: zodErro(parsedId.error.issues) }
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { data: null, error: 'Não autenticado' }
+  const { supabase, error: authError } = await requireAdmin()
+  if (authError) return { data: null, error: authError }
 
-  // Deletar a venda — o cascade apaga os itens automaticamente
-  // e o trigger `restaurar_estoque` devolve o estoque de cada item
-  const { error } = await supabase
+  // O cascade apaga os itens automaticamente
+  const { error, data: rows } = await supabase
     .from('vendas')
     .delete()
-    .eq('id', vendaId)
+    .eq('id', parsedId.data)
+    .select('id')
 
   if (error) return { data: null, error: error.message }
+  if (!rows || rows.length === 0) return { data: null, error: 'Venda não encontrada' }
 
   revalidatePath('/vendas')
   revalidatePath('/dashboard')
@@ -111,17 +125,11 @@ export async function carregarMaisVendas(
   offset: number,
   pageSize = 20,
 ): Promise<ApiResponse<Venda[]>> {
-  const supabase = await createClient()
+  const { supabase, isAdmin, error: authError } = await requireUser()
+  if (authError) return { data: null, error: authError }
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { data: null, error: 'Não autenticado' }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-  const isAdmin = profile?.role === 'admin'
+  offset   = Math.max(0, Math.trunc(offset) || 0)
+  pageSize = Math.min(100, Math.max(1, Math.trunc(pageSize) || 20))
 
   let query = supabase
     .from('vendas')
@@ -145,43 +153,19 @@ export async function carregarMaisVendas(
   return { data: data as unknown as Venda[], error: null }
 }
 
-export async function listarVendas(
-  filtro?: { dias?: number }
-): Promise<ApiResponse<Venda[]>> {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { data: null, error: 'Não autenticado' }
-
-  let query = supabase
-    .from('vendas')
-    .select('*, profiles(nome, role), venda_itens(*, produtos(nome, sku))')
-    .order('created_at', { ascending: false })
-    .limit(50)
-
-  if (filtro?.dias) {
-    const from = new Date()
-    from.setDate(from.getDate() - filtro.dias)
-    query = query.gte('created_at', from.toISOString())
-  }
-
-  const { data, error } = await query
-  if (error) return { data: null, error: error.message }
-  return { data: data as Venda[], error: null }
-}
-
 export async function validarCupon(
   codigo: string
-): Promise<ApiResponse<{ id: string; tipo: string; valor: number; valorDesconto: number } | null>> {
-  const supabase = await createClient()
+): Promise<ApiResponse<{ id: string; tipo: TipoDesconto; valor: number }>> {
+  const parsed = z.string().trim().min(1).max(20).safeParse(codigo)
+  if (!parsed.success) return { data: null, error: 'Cupom inválido ou não encontrado' }
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { data: null, error: 'Não autenticado' }
+  const { supabase, error: authError } = await requireUser()
+  if (authError) return { data: null, error: authError }
 
   const { data, error } = await supabase
     .from('cupons')
     .select('id, tipo, valor, uso_maximo, usos, validade_em')
-    .eq('codigo', codigo.toUpperCase().trim())
+    .eq('codigo', parsed.data.toUpperCase())
     .eq('ativo', true)
     .single()
 
@@ -194,9 +178,9 @@ export async function validarCupon(
     return { data: null, error: 'Cupom esgotado' }
   }
 
-  // valorDesconto será calculado no cliente com base no subtotal
+  // O valor em R$ é recalculado no carrinho e, de forma definitiva, na RPC
   return {
-    data: { id: data.id, tipo: data.tipo, valor: data.valor, valorDesconto: 0 },
+    data: { id: data.id, tipo: data.tipo as TipoDesconto, valor: data.valor },
     error: null,
   }
 }

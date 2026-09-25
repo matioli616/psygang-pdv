@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import ReciboClient from './ReciboClient'
+import ReciboClient, { type VendaRecibo } from './ReciboClient'
 
 interface Props {
   params: { venda_id: string }
@@ -13,10 +13,10 @@ export default async function ReciboPage({ params }: Props) {
   const { data: venda, error } = await supabase
     .from('vendas')
     .select(`
-      id, total, desconto, forma_pagamento, observacao, created_at,
+      id, numero, total, desconto, forma_pagamento, observacao, created_at,
       profiles ( nome, role ),
       venda_itens (
-        id, qtd, preco_unitario, custo_unitario,
+        id, qtd, preco_unitario, desconto_item,
         produtos ( id, nome, sku )
       )
     `)
@@ -25,11 +25,6 @@ export default async function ReciboPage({ params }: Props) {
 
   if (error || !venda) notFound()
 
-  // Número sequencial: quantas vendas existem até esta (inclusive)
-  const { count: numero } = await supabase
-    .from('vendas')
-    .select('*', { count: 'exact', head: true })
-    .lte('created_at', venda.created_at)
-
-  return <ReciboClient venda={venda as any} numero={numero ?? 1} />
+  // Número fixo gravado na venda (sequence no banco)
+  return <ReciboClient venda={venda as unknown as VendaRecibo} numero={venda.numero} />
 }

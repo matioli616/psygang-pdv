@@ -59,7 +59,9 @@ export default function SignupPage() {
         <h2 className="font-display text-2xl uppercase tracking-wide text-text-primary">
           Criar Conta
         </h2>
-        <p className="text-text-muted text-sm mt-1">Junte-se ao time</p>
+        <p className="text-text-muted text-sm mt-1">
+          Junte-se ao time — um admin precisa liberar seu acesso
+        </p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

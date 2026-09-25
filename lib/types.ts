@@ -18,13 +18,16 @@ export interface Profile {
 export interface Produto {
   id: string
   nome: string
-  sku: string
+  sku: string | null
   preco_venda: number
-  custo: number
+  custo: number        // só admin lê (listar_produtos_admin)
   estoque: number
   ativo: boolean
   created_at: string
 }
+
+// Produto como o vendedor enxerga — sem custo (GRANT por coluna no banco)
+export type ProdutoVenda = Pick<Produto, 'id' | 'nome' | 'sku' | 'preco_venda' | 'estoque'>
 
 export interface Venda {
   id: string
@@ -33,6 +36,7 @@ export interface Venda {
   desconto: number
   forma_pagamento: FormaPagamento
   observacao?: string
+  numero?: number
   created_at: string
   // joins
   profiles?: Profile
@@ -45,7 +49,8 @@ export interface VendaItem {
   produto_id: string
   qtd: number
   preco_unitario: number
-  custo_unitario: number
+  custo_unitario?: number   // só admin lê
+  desconto_item?: number
   // join
   produtos?: Produto
 }
@@ -70,12 +75,11 @@ export interface CupomAplicado {
   codigo: string
   tipo: TipoDesconto
   valor: number          // valor original do cupom (% ou R$)
-  valorDesconto: number  // R$ calculado já aplicado
 }
 
 // Carrinho (estado local, não persiste no banco)
 export interface CarrinhoItem {
-  produto: Produto
+  produto: ProdutoVenda
   qtd: number
   desconto_item: number  // desconto R$ aplicado só neste item
 }
@@ -84,6 +88,23 @@ export interface CarrinhoItem {
 export interface ApiResponse<T> {
   data: T | null
   error: string | null
+}
+
+// Linha retornada por dashboard_vendas()
+export interface VendaDashboard {
+  id: string
+  total: number
+  desconto: number
+  forma_pagamento: FormaPagamento
+  vendedor_id: string
+  created_at: string
+  profiles: { nome: string } | null
+  venda_itens: {
+    qtd: number
+    preco_unitario: number
+    custo_unitario: number
+    produtos: { nome: string } | null
+  }[]
 }
 
 // KPIs do dashboard

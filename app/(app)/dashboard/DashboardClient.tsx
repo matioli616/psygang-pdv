@@ -10,27 +10,13 @@ import {
   DollarSign, ArrowUpRight, ArrowDownRight,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { calcKPIs, calcVariacao } from '@/lib/metrics'
+import type { VendaDashboard } from '@/lib/types'
 
 // ─────────────────────────────────────────
 // TIPOS
 // ─────────────────────────────────────────
-type ItemVenda = {
-  qtd: number
-  preco_unitario: number
-  custo_unitario: number
-  produtos: { nome: string } | null
-}
-
-type VendaRaw = {
-  id: string
-  total: number
-  desconto: number
-  forma_pagamento: string
-  vendedor_id: string
-  created_at: string
-  profiles: { nome: string } | null
-  venda_itens: ItemVenda[]
-}
+type VendaRaw = VendaDashboard
 
 type Filtro = 'hoje' | 'ontem' | '7d' | 'mes' | 'custom'
 
@@ -97,31 +83,6 @@ function getCompareRange(filtro: Filtro, from: Date, to: Date) {
   if (filtro === 'ontem' || filtro === 'custom') return null
   const dur = to.getTime() - from.getTime()
   return { from: new Date(from.getTime() - dur), to: new Date(from.getTime() - 1) }
-}
-
-// ─────────────────────────────────────────
-// FÓRMULAS FINANCEIRAS (claude.md — imutáveis)
-// ─────────────────────────────────────────
-function calcKPIs(vendas: VendaRaw[]) {
-  // Faturamento = SUM(vendas.total)
-  const faturamento = vendas.reduce((s, v) => s + v.total, 0)
-  // CPV = SUM(venda_itens.custo_unitario * quantidade)
-  const cpv = vendas.reduce(
-    (s, v) => s + v.venda_itens.reduce((si, i) => si + i.custo_unitario * i.qtd, 0), 0
-  )
-  // Lucro = Faturamento - CPV - SUM(descontos)
-  const descontos = vendas.reduce((s, v) => s + v.desconto, 0)
-  const lucro = faturamento - cpv - descontos
-  // Margem % = (Lucro / Faturamento) * 100
-  const margem = faturamento > 0 ? (lucro / faturamento) * 100 : 0
-  // Ticket Médio = Faturamento / COUNT(vendas)
-  const ticketMedio = vendas.length > 0 ? faturamento / vendas.length : 0
-  return { faturamento, cpv, lucro, margem, ticketMedio, total: vendas.length }
-}
-
-function calcVariacao(current: number, previous: number) {
-  if (previous === 0) return null
-  return ((current - previous) / previous) * 100
 }
 
 // ─────────────────────────────────────────

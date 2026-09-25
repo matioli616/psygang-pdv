@@ -9,6 +9,7 @@ import { Edit2, X, Users, ToggleLeft, ToggleRight } from 'lucide-react'
 import { atualizarMembro, toggleAtivoMembro } from '@/lib/actions/equipe'
 import { formatCurrency } from '@/lib/utils'
 import type { Profile } from '@/lib/types'
+import { calcComissao } from '@/lib/metrics'
 
 const schema = z.object({
   nome: z.string().min(2),
@@ -27,6 +28,7 @@ export default function EquipeClient({
   const [lista, setLista] = useState(profiles)
   const [editando, setEditando] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -40,8 +42,10 @@ export default function EquipeClient({
   async function onSubmit(data: FormData) {
     if (!editando) return
     setLoading(true)
+    setErro(null)
     const { error } = await atualizarMembro({ id: editando.id, ...data })
-    if (!error) {
+    if (error) setErro(error)
+    else {
       setLista(l => l.map(p => p.id === editando.id ? { ...p, ...data } : p))
       setEditando(null)
     }
@@ -49,7 +53,9 @@ export default function EquipeClient({
   }
 
   async function toggleAtivo(profile: Profile) {
-    await toggleAtivoMembro(profile.id, !profile.ativo)
+    setErro(null)
+    const { error } = await toggleAtivoMembro(profile.id, !profile.ativo)
+    if (error) { setErro(error); return }
     setLista(l => l.map(p => p.id === profile.id ? { ...p, ativo: !p.ativo } : p))
   }
 
@@ -57,10 +63,16 @@ export default function EquipeClient({
     <div className="space-y-4">
       <h2 className="page-title text-2xl">Equipe</h2>
 
+      {erro && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
+          <p className="text-red-400 text-sm">{erro}</p>
+        </div>
+      )}
+
       <div className="space-y-3">
         {lista.map(profile => {
           const fat = faturamentoPorVendedor[profile.id] ?? 0
-          const comissao = fat * (profile.comissao_pct / 100)
+          const comissao = calcComissao(fat, profile.comissao_pct)
 
           return (
             <motion.div key={profile.id} layout className={`card space-y-2 ${!profile.ativo ? 'opacity-50' : ''}`}>

@@ -180,8 +180,8 @@ export default function NovaVendaPage() {
           >
             <p className="text-text-primary text-sm font-medium leading-tight line-clamp-2">{produto.nome}</p>
             <p className="money text-base">{formatCurrency(produto.preco_venda)}</p>
-            <div className="flex items-center justify-between">
-              <p className="text-text-muted text-xs">Estoque: {produto.estoque}</p>
+            {/* Estoque oculto enquanto o controle está desligado no banco */}
+            <div className="flex items-center justify-end">
               <div className="w-6 h-6 rounded-full bg-neon-purple/20 flex items-center justify-center">
                 <Plus size={12} className="text-neon-purple" />
               </div>

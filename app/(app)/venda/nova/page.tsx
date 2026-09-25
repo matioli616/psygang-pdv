@@ -54,7 +54,8 @@ export default function NovaVendaPage() {
     // Sem `custo`: vendedor não tem permissão de leitura nessa coluna
     let q = supabase.from('produtos')
       .select('id, nome, sku, preco_venda, estoque')
-      .eq('ativo', true).gt('estoque', 0).order('nome').limit(20)
+      // Sem filtro de estoque: o controle está desligado no banco (triggers desativados)
+      .eq('ativo', true).order('nome').limit(20)
     if (termo) q = q.ilike('nome', `%${termo}%`)
     const { data } = await q
     setProdutos(data ?? [])
